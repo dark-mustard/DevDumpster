@@ -1,2 +1,5 @@
 # DevDumpster
-Misc / unsorted scripts
+
+**!DANGER AHEAD!** 
+
+Misc / unsorted scripts - use at own risk.
