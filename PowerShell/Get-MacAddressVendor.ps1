@@ -1,4 +1,4 @@
-$script:APIKey_MacAddress-io = ""
+$script:APIKey_MacAddressio = ""
 function Get-MacAddressVendor{
     <#
         .SYNOPSIS
@@ -147,7 +147,7 @@ function Get-MacAddressVendor{
                 # {1} = Output Type (json, etc)
                 # {2} = API Key
                 [PSCustomObject]@{
-                    APIKey              = $script:APIKey_MacAddress-io
+                    APIKey              = $script:APIKey_MacAddressio
                     RequestFormat       = 'https://api.macaddress.io/v1?apiKey={2}&output={1}&search={0}'
                     RequestDelay        = 1
                     SupportedOuputTypes = @(
