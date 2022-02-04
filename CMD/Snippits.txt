@@ -1,0 +1,4 @@
+REM Suppress ALL Output
+(
+	ECHO Type code here and it will not be displayed in the output.
+) >nul 2>&1
