@@ -11,7 +11,6 @@ SET log1="%~dp0Results.txt"
 SET log2="%~dp0Log.txt"
 
 SET LogDir="C:\inetpub\logs\LogFiles\W3SVC"
-REM SET LogDir="C:\Users\gphillipssa\Desktop\IIS LOGS"
 
 cd %LogDir%
 
