@@ -1,4 +1,760 @@
-REM Suppress ALL Output
+REM ##########################
+REM # Suppress ALL Output
+REM ##########################
 (
 	ECHO Type code here and it will not be displayed in the output.
 ) >nul 2>&1
+
+
+REM ####
+REM ## ADD CREDENTIALS
+REM ####
+ECHO    //-------------------
+ECHO    // ^*Setting credentials for the following servers:
+FOR /F "tokens=1,2 delims= " %%B in (SAServers.txt) DO (
+	REM ECHO ^[%%B^] - ^[%%C^]
+	IF [%%C] == [] (ECHO ^*Server:  %%B) ELSE ( ECHO    //   ^|-%%B ^/ %%C ) (
+		cmdkey /delete:%%B
+		cmdkey /add:%%B /user:!User! /password:!password!
+	) >nul 2>&1
+)
+ECHO    //   ^\
+ECHO    // ^[Process complete^]
+ECHO    //-------------------
+ECHO.
+
+:AddServerCredentials <serverName> <userName> <password>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "serverName=!%~1!"
+	SET "userName=!%~2!"
+	SET "password=!%~3!"
+	(
+		cmdkey /delete:!serverName!
+		cmdkey /add:!serverName! /user:!userName! /password:!password!
+	) >nul 2>&1
+)
+(
+	ENDLOCAL
+	exit /b
+)
+
+:AddServerListCredentials <fileName> <userName> <password>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "fileName=!%~1!"
+	SET "userName=!%~2!"
+	SET "password=!%~3!"
+	ECHO    //-------------------
+	ECHO    // ^*Setting credentials for the following servers:
+	FOR /F "tokens=1,2 delims= " %%B in (!fileName!) DO (
+		REM ECHO ^[%%B^] - ^[%%C^]
+		IF [%%C] == [] (ECHO ^*Server:  %%B) ELSE ( ECHO    //   ^|-%%B ^/ %%C ) 
+		CALL :AddServerCredentials %%B !username! !password!
+	)
+	ECHO    //   ^\
+	ECHO    // ^[Process complete^]
+	ECHO    //-------------------
+	ECHO.
+)
+(
+	ENDLOCAL
+	exit /b
+)
+
+
+:SetPassword <out_PW>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "vbScript=%temp%\GetPassword.vbs"
+    SET "psScript=%temp%\GetPassword.ps1"
+    CALL :GetWMIValue "OS" "Version" OSVer
+        REM ECHO ^{vbScript^} ---^> !vbScript!
+        REM ECHO ^{psScript^} ---^> !psScript!
+        REM ECHO ^{OSVer^} ------^> !OSVer!
+    <nul: set /p out_PW=[Enter password]
+    IF "!OSVer:~0,3!"=="5.1" ( 
+        REM ECHO ^* Using VBScript ^*
+        > !vbScript! (
+            ECHO Set oScriptPW ^= CreateObject^(^"ScriptPW.Password^"^)
+            ECHO strPassword ^= oScriptPW.GetPassword^(^)
+            ECHO Wscript.StdOut.WriteLine strPassword
+        )
+        for /f "delims=" %%A in ('cscript /nologo !vbScript!') do set "out_PW=%%A"
+        DEL /Q !vbScript!
+    ) ELSE (
+        REM ECHO ^* Using Powershell ^*
+        > !psScript! (
+            ECHO ^$password ^= Read-Host ^"^:^" ^-AsSecureString
+            ECHO ^$password ^= ^[Runtime.InteropServices.Marshal^]^:^:SecureStringToBSTR^(^$password^)
+            ECHO ^$password ^= ^[Runtime.InteropServices.Marshal^]^:^:PtrToStringAuto^(^$password^)
+            ECHO echo ^$password
+        )
+        for /f "delims=" %%A in ('powershell -file !psScript!') do set "out_PW=%%A"
+        DEL /Q !psScript!
+    )
+        REM ECHO ^{out_PW^} -----^> !out_PW!
+)
+(
+    ENDLOCAL
+    SET "%~1=%out_PW%"
+    EXIT /b
+)
+
+
+
+:GetWMIValue <class> <property> <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "class=%~1"
+    SET "prop=%~2"
+    SET "cmd=wmic !class! get !prop!"
+        REM ECHO ^{class^} --^> !class!
+        REM ECHO ^{prop^} ---^> !prop!
+        REM ECHO ^{cmd^} ----^> !cmd!
+
+    SET "val=null"
+
+    FOR /F "skip=1" %%a IN ('"!cmd!"') DO (
+        FOR /F "delims=" %%b IN ("%%a") DO (
+            SET "out_VAL=%%b"
+            SET "out_VAL=!out_VAL: =!"
+        )
+    )
+        REM ECHO ^{out_VAL^} ----^> !out_VAL!
+)
+(
+    ENDLOCAL
+    SET %3=%out_VAL%
+    EXIT /b
+)
+
+
+
+:GetWMIValue <class> <property> <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "class=%~1"
+    SET "prop=%~2"
+    SET "cmd=wmic !class! get !prop!"
+        REM ECHO ^{class^} --^> !class!
+        REM ECHO ^{prop^} ---^> !prop!
+        REM ECHO ^{cmd^} ----^> !cmd!
+
+    SET "val=null"
+
+    FOR /F "skip=1" %%a IN ('"!cmd!"') DO (
+        FOR /F "delims=" %%b IN ("%%a") DO (
+            SET "out_VAL=%%b"
+            SET "out_VAL=!out_VAL: =!"
+        )
+    )
+        REM ECHO ^{out_VAL^} ----^> !out_VAL!
+)
+(
+    ENDLOCAL
+    SET %3=%out_VAL%
+    EXIT /b
+)
+
+
+
+:GetWMIFileVersion <out_VER> <file> <OPT_host>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "file=%~2"
+        SET "file=!file:\\=\!"
+        SET "file=!file:\=\\!"
+    SET "OPT_host=%~3"
+    IF "!OPT_host!" EQU "" ( SET "OPT_host=." )
+    SET "cmd=wmic /node:"!OPT_host!" datafile where name=^"!file!^" get Version"
+        REM ECHO ^{file^} ------^> !file!
+        REM ECHO ^{OPT_host^} --^> !OPT_host!
+        REM ECHO ^{cmd^} -------^> !cmd!
+
+    SET "val=null"
+
+    FOR /F "skip=1" %%a IN ('"!cmd!" ') DO (
+        FOR /F "delims=" %%b IN ("%%a") DO (
+            SET "out_VER=%%b"
+            SET "out_VER=!out_VER: =!"
+        )
+    )
+        REM ECHO ^{out_VER^} ---^> !out_VER!
+)
+(
+    ENDLOCAL
+    SET %1=%out_VER%
+    EXIT /b
+)
+
+
+:CheckHostOnline <pcname> <isonline>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "pcname=!%~1!"
+	FOR /F %%i in (' "ping /n 1 !pcname! ^| findstr "Reply" " ') DO SET "output=%%i"
+	IF "!output:~0,5!"=="Reply" ( SET "isonline=TRUE" ) ELSE ( SET "isonline=FALSE" )
+)
+(
+	ENDLOCAL
+	SET "%~2=%isonline%"
+	EXIT /B
+)
+
+
+
+:GetWMIRAMTotalMB <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    CALL :GetWMIValue ComputerSystem TotalPhysicalMemory out_VAL_STR
+        REM ECHO ^{out_VAL_STR^} --^> ^[!out_VAL_STR!^]
+    SET "psCMD=powershell [Math]::Round((!out_VAL_STR! / 1048576),[System.MidpointRounding]::AwayFromZero)"
+        REM ECHO ^{psCMD^} --------^> ^[!psCMD!^]
+    for /f "delims=" %%a in ('!psCMD!') do SET "out_VAL=%%a"
+        REM ECHO ^{out_VAL^} ------^> ^[!out_VAL!^]
+)
+(
+    ENDLOCAL
+    SET %1=%out_VAL%
+    EXIT /b
+)
+:GetWMIRAMTotalGB <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    CALL :GetWMIValue ComputerSystem TotalPhysicalMemory out_VAL_STR
+        REM ECHO ^{out_VAL_STR^} --^> ^[!out_VAL_STR!^]
+    SET "psCMD=powershell [Math]::Round((!out_VAL_STR! / 1073741824),[System.MidpointRounding]::AwayFromZero)"
+        REM ECHO ^{psCMD^} --------^> ^[!psCMD!^]
+    for /f "delims=" %%a in ('!psCMD!') do SET "out_VAL=%%a"
+        REM ECHO ^{out_VAL^} ------^> ^[!out_VAL!^]
+)
+(
+    ENDLOCAL
+    SET %1=%out_VAL%
+    EXIT /b
+)
+:GetWMIOSArchitecture <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    CALL :GetWMIValue OS OSArchitecture out_VAL
+)
+(
+    ENDLOCAL
+    SET %1=%out_VAL%
+    EXIT /b
+)
+:GetWMIOSVersion <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    CALL :GetWMIValue OS Version out_VAL
+)
+(
+    ENDLOCAL
+    SET %1=%out_VAL%
+    EXIT /b
+)
+:GetWMIOSBuildNumber <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    CALL :GetWMIValue OS BuildNumber out_VAL
+)
+(
+    ENDLOCAL
+    SET %1=%out_VAL%
+    EXIT /b
+)
+
+
+:RunPSCMD <cmd> <out_VAL>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "cmd=!%~1!"
+    IF "!cmd:0,11!" NEQ "powershell " SET "cmd=powershell !cmd!"
+        REM ECHO ^{cmd^} -----------^> ^[!cmd!^]
+    for /f "delims=" %%a in ('!cmd!') do SET "out_VAL=%%a"
+        REM ECHO ^{out_VAL^} -------^> ^[!out_VAL!^]
+
+    IF !errorlevel! GTR 0 (
+        ECHO #################################
+        ECHO ###  ERROR OCCURRED ###
+        ECHO #################################
+        ECHO # ^{Function^} -----^> RunPSCMD
+        ECHO # ^{cmd^} ----------^> ^[!cmd!^]
+        ECHO # ^{out_VAL^} ------^> ^[!out_VAL!^]
+        ECHO # ^{Error Level^} --^> %errorlevel%
+        ECHO #################################
+    )
+)
+(
+    ENDLOCAL
+    SET %2=%out_VAL%
+    EXIT /b
+)
+
+
+
+REM ########################
+REM # :GetBATFileName
+REM ########################
+REM ## Input:
+REM ##  <out_Filename> Variable to store filename output.
+REM ##  <opt_Debug> Option to view / suppress debug output.
+REM ##    0 - Suppress
+REM ##    1 - View
+REM ##    [DEFAULT] = 0
+:GetBATFileName <out_Filename> <opt_Debug>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "opt_Debug=%~2"
+        IF "!opt_Debug!"=="" ( SET "opt_Debug=0" )
+
+    IF "!opt_Debug!"=="1" ( 
+        ECHO #############################
+        ECHO ## GetBATFileName
+        ECHO #############################
+    )
+
+    REM GETS SHORT FILE NAME...
+    SET "pscmd=powershell Split-Path "%~f0" -leaf"
+    IF "!opt_Debug!"=="1" ( 
+        ECHO # -^{^~f0^} ----^> ^[%~f0^]
+        ECHO # -^{pscmd^} --^> ^[!pscmd!^]
+    )
+    FOR /F "delims=" %%A IN ('!pscmd!') DO SET "out_Filename=%%A"
+    REM REMOVES FILE EXTENSION...
+    SET "out_Filename=!out_Filename:~,-4!"
+
+    IF "!opt_Debug!"=="1" ( 
+        IF !ERRORLEVEL! NEQ 0 ( SET /a "ErrorOccurred=1" ) ELSE (
+            IF NOT "!ErrorMessage!"=="" ( SET /a "ErrorOccurred=1" )
+        )
+        IF "!ErrorOccurred!"=="1" (
+            ECHO # -ERROR OCCURRED^:
+            ECHO #   ^|-^{ErrorLevel^} ----^> ^[!ERRORLEVEL!^]
+            ECHO #   ^\
+        )
+        ECHO # -OUTPUTS
+        ECHO #   ^|-^{out_Filename^} --^> ^[!out_Filename!^]
+        ECHO #   ^\
+        ECHO #############################
+    )
+)
+(
+    ENDLOCAL
+    SET %1=%out_Filename%
+    EXIT /B !ERRORLEVEL!
+)
+
+:GetFileCreateDate <filename> <out_date>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "filename=%~1"
+    FOR /F "skip=5 tokens=1,2 delims= " %%A in ('dir  /a:-d /o:d /t:%2 "%~1"') DO (
+        SET "out_date=%%~a %%~b"
+    )
+)
+(
+    ENDLOCAL
+    SET %2=%out_date%
+    EXIT /b
+)
+
+
+:GetSysInternalsTool <toolName> <opt_saveTo> <opt_debug>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+
+    :: set variables
+    SET "debug=%~3"
+    IF "!debug!" == "1" ( 
+        ECHO ^[Function^] GetSysInternalsTool
+        ECHO -------------------------------------
+    )
+    SET "toolName=%~1"
+        IF NOT "!toolName:~-4!" == ".exe" ( SET "toolName=!toolName!.exe" )
+    SET "saveTo=%~2"
+        IF "!saveTo!" == "" ( SET "saveTo=%programdata%\ET\bin\" )
+        IF NOT "!saveTo:~-1!" == "\" ( SET "saveTo=!saveTo!\" )
+    SET "out_path=!saveTo!!toolName!"
+    IF "!debug!" == "1" (
+        ECHO ^| ^{saveTo^} -------^> ^[!saveTo!^]
+        ECHO ^| ^{toolName^} -----^> ^[!toolName!^]
+        ECHO ^| ^{out_path^} -----^> ^[!out_path!^]
+    )
+
+    :: ensure directory exists
+    IF NOT EXIST "!saveTo!" MKDIR "!saveTo!"
+
+    :: delete existing file if older than 30 days
+    IF EXIST "!out_path!" (
+        powershell -Command "Get-ChildItem -Path '!out_path!' -Recurse -Force | Where-Object { $_.CreationTime -lt (Get-Date).AddDays(-30) } | Remove-Item -Force "
+        IF "!debug!" == "1" ( 
+            IF NOT EXIST "!out_path!" (
+                ECHO ^| ^[File older than 30 days.^] 
+            )
+        )
+    )
+
+    :: download file if not already there
+    IF NOT EXIST "!out_path!" (
+        SET "url=https://live.sysinternals.com/!toolName!"
+        IF "!debug!" == "1" ( 
+            ECHO ^| ^[Downloading file from !url!^] 
+        )
+        powershell -Command "(New-Object Net.WebClient).DownloadFile('!url!', '!out_path!')"
+    )
+
+    IF "!debug!" == "1" ( 
+        ECHO -------------------------------------
+    )
+)
+(
+    ENDLOCAL
+    SET %~1=%out_path%
+    EXIT /B
+)
+
+
+:Len <string> <out_Length> <debug>
+( 
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "debug=%~3"
+        IF "!debug!"=="" ( SET "debug=0" )
+    SET "string=%~1"
+    SET "out_Length=0"
+    IF "!debug!"=="1" (
+        ECHO ^{string^} ------^> ^[!string!^]
+    )
+    FOR %%P IN (4096 2048 1024 512 256 128 64 32 16 8 4 2 1) DO (
+        IF "!string:~%%P,1!" NEQ "" ( 
+            SET /a "out_Length+=%%P"
+            SET "string=!string:~%%P!"
+        )
+    )
+    IF "!debug!"=="1" (
+        REM ECHO ^{out_Length^} --^> ^[!out_Length!^]
+    )
+)
+( 
+    ENDLOCAL
+    SET %2=%out_Length%
+    EXIT /B
+)
+
+
+
+REM ########################
+REM # :VerifyOSActivation
+REM ########################
+REM ## Input:
+REM ##  <out_IsActivated> Variable to store status output.
+REM ##  <opt_AutoFix> Option to activate if not already activated.
+REM ##    0 - Do not activate
+REM ##    1 - Activate if not already activated
+REM ##    [DEFAULT] = 0
+REM ##  <opt_LicenseKey> Option to include a specific license key.
+REM ##    Format:  "@@@@@-@@@@@-@@@@@-@@@@@-@@@@@"
+REM ##  <opt_Debug> Option to view / suppress debug output.
+REM ##    0 - Suppress
+REM ##    1 - View
+REM ##    [DEFAULT] = 0
+REM ## Return Values:
+REM ##  <out_IsActivated>
+REM ##    0 - No
+REM ##    1 - OS was already activated - no action taken
+REM ##    2 - OS was not activated, but is now
+REM ##    9 - Unknown: Error Occurred
+:VerifyOSActivation <out_IsActivated> <opt_AutoFix> <opt_LicenseKey> <opt_Debug>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    SET "cmd_Output=%tmp%\ET_VerifyOSActivation.tmp"
+    SET "cmd_Errors=%tmp%\ET_VerifyOSActivation_Errors.tmp"
+    SET "ErrorMessage="
+    SET "opt_Debug=%~4"
+        IF "!opt_Debug!"=="" ( SET "opt_Debug=0" )
+
+    IF "!opt_Debug!"=="1" ( 
+        ECHO #############################
+        ECHO ## VerifyOSActivation
+        ECHO #############################
+        ECHO # -INPUTS
+    )
+
+    SET /a "out_IsActivated=9"
+    SET "opt_AutoFix=%~2"
+        IF "!opt_AutoFix!"=="" ( SET "opt_AutoFix=0" )
+    SET "opt_LicenseKey=%~3"
+        REM IF NOT "!opt_LicenseKey!"=="" ( 
+        REM     REM VALIDATES LICENSE KEY INPUT STRING
+        REM     CALL :Len "!opt_LicenseKey!" Key_Length
+        REM     IF NOT "!Key_Length!"=="29" (
+        REM         SET "ErrorMessage=^[Invalid Key^] Key length not 29 characters. ^(!Key_Length!^)"
+        REM         SET /a "ErrorOccurred=1"
+        REM     )
+        REM )
+    IF "!opt_Debug!"=="1" ( 
+        ECHO #   ^|-^{opt_AutoFix^} -----^> ^[!opt_AutoFix!^]
+        ECHO #   ^|-^{opt_LicenseKey^} --^> ^[!opt_LicenseKey!^]
+        ECHO #   ^\
+    )
+
+    SET "cmd=cscript //nologo "%systemroot%\system32\slmgr.vbs" /dli | find "License Status:" "
+    IF "!opt_Debug!"=="1" ( 
+        ECHO # -^{cmd^} ---^> ^[!cmd!^]
+    )
+
+    IF "!ErrorMessage!"=="" (
+        IF "!opt_Debug!"=="1" ( 
+            ECHO #   ^|----------------------------
+        )
+        FOR /F "tokens=3 delims=: " %%A in (' !cmd! ') DO (
+            IF "!opt_Debug!"=="1" ( 
+                ECHO #   ^|- License Status: %%A
+            )
+            SET "Status=%%C"
+            IF "!Status!"=="Licensed" (
+                SET /a "out_IsActivated=1"
+                IF "!opt_AutoFix!"=="1" (
+                    REM IF YOU HAVE A KEY TO SPECIFY - SETS NEW KEY AS CURRENT KEY
+                    IF NOT "!opt_LicenseKey!"=="" (
+                        (
+                            slmgr /ipk !opt_LicenseKey!
+                        ) > !cmd_Output! 2> !cmd_Errors!
+                        IF !ERRORLEVEL! NEQ 0 ( 
+                            SET /p ErrorMessage=<"!cmd_Errors!"
+                            REM SET "ErrorMessage=Could not set license key.  ^(!opt_LicenseKey!^)"
+                        )
+                        IF EXIST "!cmd_Output!" ( DEL /S "!cmd_Output!" >nul 2>&1 )
+                        IF EXIST "!cmd_Errors!" ( DEL /S "!cmd_Errors!" >nul 2>&1 )
+                    )
+                    REM ACTIVATE WITH CURRENT LICENSE KEY:
+                    IF "!ErrorMessage!"=="" (
+                        (
+                            slmgr /ato
+                        ) > !cmd_Output! 2> !cmd_Errors!
+                        IF !ERRORLEVEL! NEQ 0 (
+                            SET /p ErrorMessage=<"!cmd_Errors!"
+                            REM SET "ErrorMessage=Could not activate with current license key."
+                        ) ELSE (
+                            SET /a "out_IsActivated=3" 
+                        )
+                        IF EXIST "!cmd_Output!" ( DEL /S "!cmd_Output!" >nul 2>&1 )
+                        IF EXIST "!cmd_Errors!" ( DEL /S "!cmd_Errors!" >nul 2>&1 )
+                    )
+                )
+            ) ELSE (
+                SET /a "out_IsActivated=0"
+            )
+        )
+        IF "!opt_Debug!"=="1" ( 
+            ECHO #   ^|----------------------------
+            ECHO #   ^\
+        )
+    )
+    IF "!opt_Debug!"=="1" ( 
+        IF !ERRORLEVEL! NEQ 0 ( SET /a "ErrorOccurred=1" ) ELSE (
+            IF NOT "!ErrorMessage!"=="" ( SET /a "ErrorOccurred=1" )
+        )
+        IF "!ErrorOccurred!"=="1" (
+            ECHO # -ERROR OCCURRED^:
+            ECHO #   ^|-^{ErrorLevel^} ----^> ^[!ERRORLEVEL!^]
+            ECHO #   ^|-^{ErrorMessage^} --^> ^[!ErrorMessage!^]
+            ECHO #   ^\
+        )
+        ECHO # -OUTPUTS
+        ECHO #   ^|-^{out_IsActivated^} --^> ^[!out_IsActivated!^]
+        ECHO #   ^\
+        ECHO #############################
+    )
+)
+(
+    ENDLOCAL
+    SET %1=%out_IsActivated%
+    EXIT /B !ERRORLEVEL!
+)
+
+
+:TestSymbolicLink <out_IsSymbolicLink> <directoryPath>
+(
+    SETLOCAL ENABLEDELAYEDEXPANSION
+    ECHO ^> Function call to ^[:TestSymbolicLink^] 
+
+    SET "directoryPath=!%~2!"
+
+    ECHO    ^|-^{directoryPath^} -------^> ^[!directoryPath!^]
+
+    fsutil reparsepoint query "C:\Program Files\LabTech\Backup" | find "Symbolic Link" >nul && ( 
+        SET "out_IsSymbolicLink=true"
+    ) || (
+        SET "out_IsSymbolicLink=false"
+    )
+    
+
+    ECHO    ^|-^{out_IsSymbolicLink^} --^> ^[!out_IsSymbolicLink!^]
+    ECHO    ^\
+)
+(
+    ENDLOCAL
+    SET %1=%out_IsSymbolicLink%
+    EXIT /B
+)
+
+
+
+
+REM ##########################
+REM # Example Function
+REM ##########################
+:TestFunction <varname> <returnvar>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "question=!%~1!"
+	ECHO !question!
+	SET "answer=   -Psh. Nope."
+	IF "!question!" == "Does this work?" SET "answer=   -Yes dum dum."
+	IF %errorlevel% GTR 0 ECHO  [Error Level - %errorlevel%]
+)
+(
+	ENDLOCAL
+	SET %2=%answer%
+	EXIT /b
+)
+
+
+REM ##########################
+REM # GetDateString
+REM ##########################
+:GetDateString <returnStr>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "dateStr=!date:/=.!"
+	SET "yStr=!dateStr:~10!"
+	SET "mStr=!dateStr:~4,2!"
+	SET "dStr=!dateStr:~7,2!"
+	SET "newDateStr=!yStr!.!mStr!.!dStr!"
+)
+(
+	ENDLOCAL
+	SET "%~1=%newDateStr%"
+	exit /b
+)
+
+REM ##########################
+REM # GetTimeString
+REM ##########################
+:GetTimeString <returnStr>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "timeStr=!time::=.!"
+	SET "newTimeStr=!timeStr:~0,8!"
+	IF "!newTimeStr:~0,1!" == " " SET "newTimeStr=0!newTimeStr:~1!"
+)
+(
+	ENDLOCAL
+	SET "%~1=%newTimeStr%"
+	exit /b
+)
+
+REM ##########################
+REM # GetTimeString
+REM ##########################
+:GetDateTimeString <returnStr>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	
+	SET "dateStrRAW=!date:/=.!"
+	SET "yStr=!dateStrRAW:~10!"
+	SET "mStr=!dateStrRAW:~4,2!"
+	SET "dStr=!dateStrRAW:~7,2!"
+	SET "dateStr=!yStr!.!mStr!.!dStr!"
+	
+	SET "timeStrRAW=!time::=.!"
+	SET "timeStr=!timeStrRAW:~0,8!"
+	IF "!timeStr:~0,1!" == " " SET "timeStr=0!timeStr:~1!
+	
+	SET "dateTimeStr=!dateStr!-!timeStr!"
+)
+(
+	ENDLOCAL
+	SET "%~1=%dateTimeStr%"
+	exit /b
+)
+
+
+:CheckFolder <folder>
+(
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "folder=!%~1!"
+	IF NOT EXIST "!folder!" MKDIR "!folder!"
+)
+(
+	ENDLOCAL
+	exit /b
+)
+
+
+
+
+:ToUpper
+	:: Subroutine to convert a variable VALUE to all upper case.
+	:: The argument for this subroutine is the variable NAME.
+	SET %~1=!%1:a=A!
+	SET %~1=!%1:b=B!
+	SET %~1=!%1:c=C!
+	SET %~1=!%1:d=D!
+	SET %~1=!%1:e=E!
+	SET %~1=!%1:f=F!
+	SET %~1=!%1:g=G!
+	SET %~1=!%1:h=H!
+	SET %~1=!%1:i=I!
+	SET %~1=!%1:j=J!
+	SET %~1=!%1:k=K!
+	SET %~1=!%1:l=L!
+	SET %~1=!%1:m=M!
+	SET %~1=!%1:n=N!
+	SET %~1=!%1:o=O!
+	SET %~1=!%1:p=P!
+	SET %~1=!%1:q=Q!
+	SET %~1=!%1:r=R!
+	SET %~1=!%1:s=S!
+	SET %~1=!%1:t=T!
+	SET %~1=!%1:u=U!
+	SET %~1=!%1:v=V!
+	SET %~1=!%1:w=W!
+	SET %~1=!%1:x=X!
+	SET %~1=!%1:y=Y!
+	SET %~1=!%1:z=Z!
+GOTO:EOF
+
+
+:ToLower
+	:: Subroutine to convert a variable VALUE to all lower case.
+	:: The argument for this subroutine is the variable NAME.
+	SET %~1=!%1:A=a!
+	SET %~1=!%1:B=b!
+	SET %~1=!%1:C=c!
+	SET %~1=!%1:D=d!
+	SET %~1=!%1:E=e!
+	SET %~1=!%1:F=f!
+	SET %~1=!%1:G=g!
+	SET %~1=!%1:H=h!
+	SET %~1=!%1:I=i!
+	SET %~1=!%1:J=j!
+	SET %~1=!%1:K=k!
+	SET %~1=!%1:L=l!
+	SET %~1=!%1:M=m!
+	SET %~1=!%1:N=n!
+	SET %~1=!%1:O=o!
+	SET %~1=!%1:P=p!
+	SET %~1=!%1:Q=q!
+	SET %~1=!%1:R=r!
+	SET %~1=!%1:S=s!
+	SET %~1=!%1:T=t!
+	SET %~1=!%1:U=u!
+	SET %~1=!%1:V=v!
+	SET %~1=!%1:W=w!
+	SET %~1=!%1:X=x!
+	SET %~1=!%1:Y=y!
+	SET %~1=!%1:Z=z!
+GOTO:EOF
